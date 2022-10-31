@@ -2,9 +2,10 @@
   "embeddings": [
     {
       "tensorName": "Clinical notes",
-      "tensorShape": [10000, 200],
+      "tensorShape": [2078, 50],
       "tensorPath": "oss_data/titles_d2v_vec.tsv",
-      "metadataPath": "oss_data/titles_d2v_meta_cluster_agg.tsv"
+      "metadataPath": "oss_data/titles_d2v_meta_cluster.tsv",
+      "bookmarksPath": "oss_data/bookmarks.txt"
     }
   ],
   "modelCheckpointPath": "Clinical note datasets"
