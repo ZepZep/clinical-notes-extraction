@@ -3,8 +3,8 @@
     {
       "tensorName": "Clinical notes",
       "tensorShape": [10000, 200],
-      "tensorPath": "oss_data/word2vec_10000_200d_tensors.bytes",
-      "metadataPath": "oss_data/word2vec_10000_200d_labels.tsv"
+      "tensorPath": "oss_data/titles_d2v_vec.tsv",
+      "metadataPath": "oss_data/titles_d2v_meta_cluster_agg.tsv"
     }
   ],
   "modelCheckpointPath": "Clinical note datasets"
