@@ -1,0 +1,11 @@
+{
+  "embeddings": [
+    {
+      "tensorName": "Clinical notes",
+      "tensorShape": [10000, 200],
+      "tensorPath": "oss_data/word2vec_10000_200d_tensors.bytes",
+      "metadataPath": "oss_data/word2vec_10000_200d_labels.tsv"
+    },
+  ],
+  "modelCheckpointPath": "Clinical note datasets"
+}
