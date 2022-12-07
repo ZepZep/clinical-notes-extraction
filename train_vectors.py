@@ -105,7 +105,7 @@ def vectorize_d2v(ds, dim, window=5, min_count=5, workers=4, epochs=10):
                     callbacks=[tqdmcb]
                    )
 
-    tqdm.pandas(desc=f'Infering test vectors')
+    tqdm.pandas(desc=f'Infering train vectors')
     vectors_train = ds["train"].doc.progress_apply(model.infer_vector)
 
     tqdm.pandas(desc=f'Infering test vectors')
@@ -121,12 +121,6 @@ print("--> Training Doc2Vec Vectorizer")
 vectors_d2v_train, vectors_d2v_test,  model_d2v = vectorize_d2v(ds, dim)
 np.save("predictions/d2v_titles.npy", model_d2v.dv.vectors)
 
-tqdm.pandas(desc=f'Infering test vectors')
-vectors_d2v_train = ds["train"].doc.progress_apply(model_d2v.infer_vector)
-
-tqdm.pandas(desc=f'Infering test vectors')
-vectors_d2v_test = ds["test"].doc.progress_apply(model_d2v.infer_vector)
-
 
 print("--> Defining Classification NN")
 def make_model(vectors, n_titles, dropout=0.0):
@@ -139,7 +133,6 @@ def make_model(vectors, n_titles, dropout=0.0):
 
     model = tf.keras.Model(lin, lout)
 
-    # Compile the model with binary crossentropy loss and an adam optimizer.
     model.compile(loss="sparse_categorical_crossentropy",
                   optimizer="adam", metrics=["accuracy"])
 
@@ -147,7 +140,7 @@ def make_model(vectors, n_titles, dropout=0.0):
 
 
 print("--> Training LSA Classifier")
-nn_lsa = model = make_model(vectors_lsa_train, len(t2tid), dropout=0.0)
+nn_lsa = make_model(vectors_lsa_train, len(t2tid), dropout=0.0)
 nn_lsa.summary()
 
 nn_lsa.fit(
@@ -163,7 +156,7 @@ np.savez_compressed("predictions/pred_lsa.npz", y=pred_lsa.astype(np.float16))
 
 
 print("--> Training Doc2Vec Classifier")
-nn_d2v = model = make_model(vectors_d2v_train, len(t2tid), dropout=0.0)
+nn_d2v = make_model(vectors_d2v_train, len(t2tid), dropout=0.0)
 nn_d2v.summary()
 
 nn_d2v.fit(
