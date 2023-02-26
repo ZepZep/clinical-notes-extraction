@@ -16,7 +16,8 @@ import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras.models import Sequential
 
-import gc
+from eval_utils import create_metrics
+
 
 tqdm.pandas()
 
@@ -27,17 +28,13 @@ hidden_size = 64
 name = "nurse"
 per_category_limit = None
 
-def create_name(pre, name, post):
-    if name:
-        return f"{pre}{name}-{post}"
-    return f"{pre}{post}"
-
 def limit_samples(df, group, max_count):
     return df.groupby(group).apply(lambda x: x if len(x) <= max_count else x.sample(max_count)).droplevel(0)
 
+
 print("--> Loading Dataset")
-parts = pd.read_feather(create_name("dataset/", name, "parts.feather"))
-titles = pd.read_feather(create_name("dataset/", name, "titles.feather"))
+parts = pd.read_feather(f"dataset/{name}-parts.feather")
+titles = pd.read_feather(f"dataset/{name}-titles.feather")
 
 relevant = parts
 if per_category_limit is not None:
@@ -83,18 +80,18 @@ print("--> Vector Models")
 LSAResult = namedtuple("LSAModel", ["vectorizer", "decomposer"])
 
 def vectorize_LSA(ds, dim):
-    print("TF-IDF vectorizing")
+    print("----> TF-IDF vectorizing")
     vectorizer = TfidfVectorizer(lowercase=False, min_df=3)
     tqdm.pandas(desc=f'Joining tokens')
     docs = ds["train"].doc.progress_apply(" ".join)
     x = vectorizer.fit_transform(docs)
 
-    print("SVD Decomposition")
+    print("----> SVD Decomposition")
     svd = TruncatedSVD(n_components=dim, n_iter=5, random_state=42)
     # vectors_train = svd.fit_transform(x)
     vectors_train = svd.fit_transform(x)
 
-    print("Infering vectors")
+    print("----> Infering vectors")
     docs = ds["test"].doc.progress_apply(" ".join)
     vectors_test = svd.transform(vectorizer.transform(docs))
 
@@ -117,10 +114,11 @@ def vectorize_d2v(ds, dim, window=5, min_count=5, workers=4, epochs=10):
     tqdm.pandas(desc=f'Tagging documments')
     x = ds["train"].progress_apply(make_tagged_document, axis=1)
     tqdmcb = TqdmProgress(epochs, desc="Training doc2vec, epoch")
-    model = Doc2Vec(x.to_list(), vector_size=dim, window=window,
-                    min_count=min_count, workers=workers, epochs=epochs,
-                    callbacks=[tqdmcb]
-                   )
+    model = Doc2Vec(
+        x.to_list(), vector_size=dim, window=window,
+        min_count=min_count, workers=workers, epochs=epochs,
+        callbacks=[tqdmcb]
+    )
 
     tqdm.pandas(desc=f'Infering train vectors')
     vectors_train = ds["train"].doc.progress_apply(model.infer_vector)
@@ -134,9 +132,9 @@ print("--> Training LSA Vectorizer")
 vectors_lsa_train, vectors_lsa_test, model_lsa = vectorize_LSA(ds, dim)
 
 
-# print("--> Training Doc2Vec Vectorizer")
-# vectors_d2v_train, vectors_d2v_test,  model_d2v = vectorize_d2v(ds, dim)
-# np.save(create_name("predictions/", name, "d2v_titles_sample.npy"), model_d2v.dv.vectors)
+print("--> Training Doc2Vec Vectorizer")
+vectors_d2v_train, vectors_d2v_test,  model_d2v = vectorize_d2v(ds, dim)
+np.save(f"predictions/{name}-d2v_titles_sample.npy", model_d2v.dv.vectors)
 
 
 print("--> Defining Classification NN")
@@ -167,26 +165,21 @@ nn_lsa.fit(
     validation_split=0.1,
 )
 
-tf.keras.backend.clear_session()
-_ = gc.collect()
-
 print("--> Making LSA Predictions")
-pred_lsa = nn_lsa.predict(vectors_lsa_test, batch_size=512)
-np.savez_compressed(create_name("predictions/", name, "pred_lsa.npz"), y=pred_lsa.astype(np.float16))
+model_fcn = lambda x: nn_lsa.predict(x, batch_size=512, verbose=0)
+create_metrics(model_fcn, vectors_lsa_test, ds["test"]["label"], f"{name}-lsa", 100000)
 
+print("--> Training Doc2Vec Classifier")
+nn_d2v = make_model(vectors_d2v_train, len(titles), dropout=0.0)
+nn_d2v.summary()
 
+nn_d2v.fit(
+    x=np.stack(vectors_d2v_train), y=ds["train"].label,
+    batch_size=128,
+    epochs=10,
+    validation_split=0.1,
+)
 
-# print("--> Training Doc2Vec Classifier")
-# nn_d2v = make_model(vectors_d2v_train, len(titles), dropout=0.0)
-# nn_d2v.summary()
-
-# nn_d2v.fit(
-#     x=np.stack(vectors_d2v_train), y=ds["train"].label,
-#     batch_size=128,
-#     epochs=10,
-#     validation_split=0.1,
-# )
-
-# print("--> Making Doc2Vec Predictions")
-# pred_d2v = nn_d2v.predict(np.stack(vectors_d2v_test))
-# np.savez_compressed(create_name("predictions/", name, "pred_lsa.npz"), y=pred_d2v.astype(np.float16))
+print("--> Making Doc2Vec Predictions")
+model_fcn = lambda x: nn_d2v.predict(x, batch_size=512, verbose=0)
+create_metrics(model_fcn, vectors_lsa_test, ds["test"]["label"], f"{name}-d2v", 100000)
