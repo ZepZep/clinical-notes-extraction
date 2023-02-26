@@ -12,20 +12,37 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
 
 import tensorflow as tf
+# import tensorflow.keras as K
 from tensorflow.keras import layers
 from tensorflow.keras.models import Sequential
 
+import gc
+
 tqdm.pandas()
 
+tf.keras.backend.clear_session()
 
 dim=50
 hidden_size = 64
+name = "nurse"
+per_category_limit = None
 
+def create_name(pre, name, post):
+    if name:
+        return f"{pre}{name}-{post}"
+    return f"{pre}{post}"
+
+def limit_samples(df, group, max_count):
+    return df.groupby(group).apply(lambda x: x if len(x) <= max_count else x.sample(max_count)).droplevel(0)
 
 print("--> Loading Dataset")
-parts = pd.read_feather("dataset/parts.feather")
-titles = pd.read_feather("dataset/titles.feather")
-relevant = parts.query("label >= 0").reset_index(drop=True)
+parts = pd.read_feather(create_name("dataset/", name, "parts.feather"))
+titles = pd.read_feather(create_name("dataset/", name, "titles.feather"))
+
+relevant = parts
+if per_category_limit is not None:
+    relevant = limit_samples(parts, "label", 1000)
+relevant = relevant.query("label >= 0").reset_index(drop=True)
 
 
 print("--> Prepairing train/test")
@@ -117,9 +134,9 @@ print("--> Training LSA Vectorizer")
 vectors_lsa_train, vectors_lsa_test, model_lsa = vectorize_LSA(ds, dim)
 
 
-print("--> Training Doc2Vec Vectorizer")
-vectors_d2v_train, vectors_d2v_test,  model_d2v = vectorize_d2v(ds, dim)
-np.save("predictions/d2v_titles.npy", model_d2v.dv.vectors)
+# print("--> Training Doc2Vec Vectorizer")
+# vectors_d2v_train, vectors_d2v_test,  model_d2v = vectorize_d2v(ds, dim)
+# np.save(create_name("predictions/", name, "d2v_titles_sample.npy"), model_d2v.dv.vectors)
 
 
 print("--> Defining Classification NN")
@@ -140,32 +157,36 @@ def make_model(vectors, n_titles, dropout=0.0):
 
 
 print("--> Training LSA Classifier")
-nn_lsa = make_model(vectors_lsa_train, len(t2tid), dropout=0.0)
+nn_lsa = make_model(vectors_lsa_train, len(titles), dropout=0.0)
 nn_lsa.summary()
 
 nn_lsa.fit(
     x=vectors_lsa_train, y=ds["train"].label,
-    batch_size=128,
+    batch_size=512,
     epochs=10,
     validation_split=0.1,
 )
+
+tf.keras.backend.clear_session()
+_ = gc.collect()
 
 print("--> Making LSA Predictions")
-pred_lsa = nn_lsa.predict(vectors_lsa_test)
-np.savez_compressed("predictions/pred_lsa.npz", y=pred_lsa.astype(np.float16))
+pred_lsa = nn_lsa.predict(vectors_lsa_test, batch_size=512)
+np.savez_compressed(create_name("predictions/", name, "pred_lsa.npz"), y=pred_lsa.astype(np.float16))
 
 
-print("--> Training Doc2Vec Classifier")
-nn_d2v = make_model(vectors_d2v_train, len(t2tid), dropout=0.0)
-nn_d2v.summary()
 
-nn_d2v.fit(
-    x=np.stack(vectors_d2v_train), y=ds["train"].label,
-    batch_size=128,
-    epochs=10,
-    validation_split=0.1,
-)
+# print("--> Training Doc2Vec Classifier")
+# nn_d2v = make_model(vectors_d2v_train, len(titles), dropout=0.0)
+# nn_d2v.summary()
 
-print("--> Making Doc2Vec Predictions")
-pred_d2v = nn_d2v.predict(np.stack(vectors_d2v_test))
-np.savez_compressed("predictions/pred_d2v.npz", y=pred_d2v.astype(np.float16))
+# nn_d2v.fit(
+#     x=np.stack(vectors_d2v_train), y=ds["train"].label,
+#     batch_size=128,
+#     epochs=10,
+#     validation_split=0.1,
+# )
+
+# print("--> Making Doc2Vec Predictions")
+# pred_d2v = nn_d2v.predict(np.stack(vectors_d2v_test))
+# np.savez_compressed(create_name("predictions/", name, "pred_lsa.npz"), y=pred_d2v.astype(np.float16))
