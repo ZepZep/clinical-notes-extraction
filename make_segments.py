@@ -8,7 +8,7 @@ from tqdm.auto import tqdm
 import unidecode
 
 import os
-MIMIC_DATA = os.environ.get("AICOPE_SCRATCH") + "/datasets/physionet.org/files/mimiciii/1.4" 
+MIMIC_DATA = os.environ.get("AICOPE_SCRATCH") + "/datasets/physionet.org/files/mimiciii/1.4"
 
 def subsplit(text):
     l = re.split(r"\n(.{1,30}:)(?![0-9])", text)
@@ -29,8 +29,8 @@ def cut_record(text):
         if not part:
             continue
         yield from subsplit(part)
-        
-        
+
+
 def get_title(text):
     m = re.search(r"^(.*?)(?:\:|\.{3,4})(?![0-9])", text)
     if not m:
@@ -39,7 +39,7 @@ def get_title(text):
     title = m.group(1).strip()
     body = text[r:].strip()
     return title, body
-        
+
 def extract_and_normalize(text):
     title, body = get_title(text)
     return body, title, normalize_title(title)
@@ -94,7 +94,7 @@ def create_parts(records):
     parts.name = "text"
     parts = parts.reset_index()
     parts.index.names = ['srid']
-    
+
     tqdm.pandas(desc='Extract and normalize')
     derived_columns = pd.DataFrame.from_records(
         parts.text.progress_apply(extract_and_normalize),
@@ -107,7 +107,7 @@ def create_parts(records):
 
     print("--> Adding labels")
     parts["label"] = parts["stitle"].map(defaultdict(int, t2tid))-1
-    
+
     titles = pd.DataFrame({
         "title": tid2t.values(),
         "freq": parts.label.value_counts().iloc[1:].sort_index()
@@ -137,11 +137,11 @@ def load_records(cutoff=None):
         'TEXT': pd.StringDtype()
     }
     good_categories = {
-        'Nursing/other': 11, # 10
+        'Nursing/other': 10, # 10
         'Radiology': 9,
         'Nursing': 6, # mostly Action, response, plan
         'ECG': 0,
-        'Physician ': 10,
+        'Physician ': 11,
         'Discharge summary': 10,
         'Echo': 10,
         'Respiratory ': 10,
@@ -153,25 +153,25 @@ def load_records(cutoff=None):
         'Pharmacy': 4, # assesment, recommanation
         'Consult': 10,
     }
-    
+
     notes = pd.read_csv(f"{MIMIC_DATA}/NOTEEVENTS.csv.gz", dtype=types, nrows=cutoff)
     stats = pd.DataFrame({
         "count": notes["CATEGORY"].sort_index(inplace=False).value_counts(),
         "goodness": good_categories
     }).sort_values(["goodness", "count"], ascending=[False, False])
     print("loaded")
-    
+
     notes["CHARTDATE"] = pd.to_datetime(notes["CHARTDATE"])
     notes = notes.sort_values(["SUBJECT_ID", "CHARTDATE"])
     print("sorted")
-    
+
     note_relevance = notes["CATEGORY"].isin(stats.query("goodness == 11").index)
     notes = notes[note_relevance]
     print("filtered for relevant categories")
-    
+
     notes = notes.groupby('SUBJECT_ID', group_keys=False).apply(lambda group: group.assign(record_number=range(len(group))))
-    print("grouped") 
-    
+    print("grouped")
+
     notes = notes[["ROW_ID", "SUBJECT_ID", "record_number", "TEXT"]]
     notes = notes.rename(columns={"ROW_ID": "rid", "SUBJECT_ID": "pid", "record_number": "rord", "TEXT": "text"})
     notes = notes.set_index(["rid", "pid", "rord"])
@@ -187,7 +187,7 @@ def create_name(pre, name, post):
 # and a column called text
 cutoff = None
 # cutoff = 1000
-name = "nurse"
+name = "phys"
 # name = None
 
 records = load_records(cutoff)
