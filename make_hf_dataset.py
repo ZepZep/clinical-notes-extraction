@@ -9,10 +9,14 @@ from transformers import AutoTokenizer
 
 tqdm.pandas()
 
-parts = pd.read_feather("dataset/parts.feather")
+inname = "nurse"
+outname = "nurse-medBERT"
+modelname = "Charangan/MedBERT"
+
+parts = pd.read_feather(f"dataset/{inname}-parts.feather")
 relevant = parts.query("label >= 0").reset_index(drop=True)
 
-tokenizer = AutoTokenizer.from_pretrained("ufal/robeczech-base")
+tokenizer = AutoTokenizer.from_pretrained(modelname)
 
 def tokenize_function(examples):
     return tokenizer(
@@ -55,5 +59,5 @@ ds = make_train_test(relevant)
 
 print("--> Saving dataset")
 path = "dataset"
-ds["train"].save_to_disk(f"{path}/train.hf")
-ds["test"].save_to_disk(f"{path}/test.hf")
+ds["train"].save_to_disk(f"{path}/{outname}-train.hf")
+ds["test"].save_to_disk(f"{path}/{outname}-test.hf")

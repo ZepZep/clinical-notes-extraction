@@ -8,12 +8,18 @@ from datasets import Dataset, load_metric
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from transformers import Trainer, TrainingArguments
 
+from eval_utils import create_metrics
+
 tqdm.pandas()
+
+inname = "nurse-medBERT"
+outname = "nurse-medBERT"
+modelname = "Charangan/MedBERT"
 
 
 print("--> Loading dataset")
-dtrain = Dataset.load_from_disk("dataset/train.hf")
-dtest = Dataset.load_from_disk("dataset/test.hf")
+dtrain = Dataset.load_from_disk(f"dataset/{inname}train.hf")
+dtest = Dataset.load_from_disk(f"dataset/{inname}test.hf")
 
 def reduce_dataset(ds):
     df = ds.to_pandas()
@@ -36,7 +42,7 @@ def reduce_dataset(ds):
 
 print("--> Loading model")
 model = AutoModelForSequenceClassification.from_pretrained(
-    "ufal/robeczech-base",
+    modelname,
     num_labels=max(dtest["label"])+1
 )
 
@@ -49,7 +55,7 @@ def compute_metrics(eval_pred):
     return acc
 
 training_args = TrainingArguments(
-    output_dir="models/robeczech",
+    output_dir=f"models/{outname}",
     per_device_train_batch_size=32,
     gradient_accumulation_steps=4,
     num_train_epochs=10,
@@ -72,7 +78,7 @@ trainer.train()
 
 
 print("--> Prediction")
-y = trainer.predict(dtest).predictions.astype(np.float16)
-print(y.shape)
+model_fcn = lambda x: trainer.predict(x).predictions.astype(np.float16)
+create_metrics(model_fcn, dtest, dtest["label"], outname, 100000)
 
-np.savez_compressed("pred_robeczech.npz", y=y)
+# np.savez_compressed("pred_robeczech.npz", y=y)

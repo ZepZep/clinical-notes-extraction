@@ -26,8 +26,8 @@ tf.keras.backend.clear_session()
 
 dim=50
 hidden_size = 64
-inname = "nurse"
-outname = "nurse_nltk"
+inname = "phys"
+outname = "phys"
 per_category_limit = None
 
 def limit_samples(df, group, max_count):
@@ -50,17 +50,17 @@ for train_index, test_index in skf.split(relevant, relevant.label):
     break
 
 def tokenize_doc(text):
-    text = re.sub(r"[0-9]", "9", text)
+    text = re.sub(r"[0-9]", "#", text)
     text = re.sub(r"([\.\,\:])(?!#)", r" \1 ", text)
     text = re.sub(r"\n", r" <br> ", text)
     return text.split()
 
 def tokenize_nltk(text):
-    text = re.sub(r"[0-9]", "9", text)
+    text = re.sub(r"[0-9]", "#", text)
     text = re.sub(r"\n", r" <br> ", text)
     return word_tokenize(text)
 
-tokenize = tokenize_nltk
+tokenize = tokenize_doc
 
 def make_dataset(relevant, indexer, tokenize_function, numproc=12):
     df = pd.concat([
@@ -143,7 +143,7 @@ vectors_lsa_train, vectors_lsa_test, model_lsa = vectorize_LSA(ds, dim)
 
 print("--> Training Doc2Vec Vectorizer")
 vectors_d2v_train, vectors_d2v_test,  model_d2v = vectorize_d2v(ds, dim)
-np.save(f"predictions/{outname}-d2v_titles_sample.npy", model_d2v.dv.vectors)
+np.save(f"predictions/{outname}-d2v_titles.npy", model_d2v.dv.vectors)
 
 
 print("--> Defining Classification NN")
