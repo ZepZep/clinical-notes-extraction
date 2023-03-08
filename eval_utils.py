@@ -22,6 +22,7 @@ def get_every_n_zip(arrays, n, split_half=False):
     half = size // 2
     start = 0
     while start < size:
+        # print("get_every_n_zip iter")
         if split_half and start < half < start+n:
             yield tuple( a[ start : half ] for a in arrays )
             start = half
@@ -103,8 +104,10 @@ def create_metrics(model_fcn, x_test, y_test, model_name, batch_size=100000):
     records_scores = []
     y_pred = []
 
-    it = list(get_every_n_zip([x_test, y_test], batch_size, split_half=True))
-    for x, y_true in tqdm(it, desc="Calculating metrics"):
+    it = get_every_n_zip([x_test, y_test], batch_size, split_half=True)
+    for x, y_true in tqdm(it, desc="Calculating metrics", total=len(x_test)//batch_size+1):
+        # print(x)
+        # print(y_true)
         y_scores = model_fcn(x)
         y_pred.append(y_scores.argmax(axis=1))
         metrics = eval_scores(y_true, y_scores, labels)
@@ -123,4 +126,7 @@ def create_metrics(model_fcn, x_test, y_test, model_name, batch_size=100000):
 
     with open(f"metrics/{model_name}-metrics.json", "w") as f:
         json.dump(metrics, f, indent=4)
+
+    np.savez_compressed(f"metrics/{model_name}-predictions.npz", y=y_pred)
+
 

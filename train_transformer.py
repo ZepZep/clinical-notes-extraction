@@ -18,8 +18,8 @@ modelname = "Charangan/MedBERT"
 
 
 print("--> Loading dataset")
-dtrain = Dataset.load_from_disk(f"dataset/{inname}train.hf")
-dtest = Dataset.load_from_disk(f"dataset/{inname}test.hf")
+dtrain = Dataset.load_from_disk(f"dataset/{inname}-train.hf")
+dtest = Dataset.load_from_disk(f"dataset/{inname}-test.hf")
 
 def reduce_dataset(ds):
     df = ds.to_pandas()
@@ -56,8 +56,9 @@ def compute_metrics(eval_pred):
 
 training_args = TrainingArguments(
     output_dir=f"models/{outname}",
-    per_device_train_batch_size=32,
-    gradient_accumulation_steps=4,
+    per_device_train_batch_size=64,
+    per_device_eval_batch_size=256,
+    gradient_accumulation_steps=1,
     num_train_epochs=10,
     learning_rate=5e-05,
     logging_steps=60,
@@ -73,12 +74,14 @@ trainer = Trainer(
     compute_metrics=compute_metrics,
 )
 
+
 print("--> Training")
 trainer.train()
 
 
 print("--> Prediction")
-model_fcn = lambda x: trainer.predict(x).predictions.astype(np.float16)
-create_metrics(model_fcn, dtest, dtest["label"], outname, 100000)
+dtest.set_format("torch")
+model_fcn = lambda x: trainer.predict(Dataset.from_dict(x)).predictions.astype(np.float16)
+create_metrics(model_fcn, dtest, dtest.with_format(type="numpy")["label"], outname, 100000)
 
 # np.savez_compressed("pred_robeczech.npz", y=y)
