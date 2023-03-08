@@ -6,13 +6,18 @@ from tqdm.auto import tqdm
 from datasets import Dataset
 from tensorflow.keras import Input
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import LSTM, Embedding, Dropout, Bidirectional
+from tensorflow.keras.layers import Dense, LSTM, Embedding, Dropout, Bidirectional
 from tensorflow.keras.callbacks import Callback
 
+from eval_utils import create_metrics
+
+
+inname = "nurse-medBERT"
+outname = "nurse-medBERT-biLSTM"
 cut=150
-modelname = "models/bilstm"
-vocab_size = 51961
-n_labels = 2078
+modelname = f"models/{outname}"
+vocab_size = 28996
+n_labels = 2297
 dropout = 0.1
 
 print("--> Loading dataset")
@@ -21,8 +26,8 @@ def load_ds(path):
     ds.set_format("numpy")
     return ds["input_ids"], ds["label"]
 
-xt, yt = load_ds("dataset/train.hf")
-xv, yv = load_ds("dataset/test.hf")
+xt, yt = load_ds(f"dataset/{inname}-train.hf")
+xv, yv = load_ds(f"dataset/{inname}-test.hf")
 
 xt = xt[:, 1:cut+1]
 xv = xv[:, 1:cut+1]
@@ -76,5 +81,5 @@ model.fit(
 model.save(modelname)
 
 print("\n--> Predicting")
-y = model.predict(xv)
-np.savez_compressed("pred_bilstm.npz", y=y)
+model_fcn = lambda x: model.predict(x)
+create_metrics(model_fcn, xv, yv, outname, 100000)
