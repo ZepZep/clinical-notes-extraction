@@ -12,9 +12,15 @@ from eval_utils import create_metrics
 
 tqdm.pandas()
 
-inname = "nurse-medBERT"
-outname = "nurse-medBERT"
-modelname = "Charangan/MedBERT"
+# inname = "c_nurse-medBERT"
+# outname = "c_nurse-medBERT"
+# modelname = "Charangan/MedBERT"
+
+inname = "c_nurse-albert_l"
+outname = "c_nurse-albert_l"
+modelname = "albert-base-v2"
+
+epochs = 5
 
 
 print("--> Loading dataset")
@@ -59,7 +65,7 @@ training_args = TrainingArguments(
     per_device_train_batch_size=64,
     per_device_eval_batch_size=256,
     gradient_accumulation_steps=1,
-    num_train_epochs=10,
+    num_train_epochs=epochs,
     learning_rate=5e-05,
     logging_steps=60,
     save_steps=10000,
