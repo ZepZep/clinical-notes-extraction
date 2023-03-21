@@ -64,13 +64,14 @@ def normalize_title(title):
     title = title.strip()
     title = title.lower()
     title = unidecode.unidecode(title)
-    title = re.sub(r"[0-9]", "#", title)
+    title = re.sub(r"[0-9]", "9", title)
     return title
 
 def select_good_titles(titles, repeats=20, words=6):
     mask = titles["count"] >= repeats
-    mask &= titles.title.str.count(" ") < words
-    mask &= ~titles.title.str.contains(",")
+    mask &= titles["title"].str.len() > 0
+    mask &= titles["title"].str.count(" ") < words
+    mask &= ~titles["title"].str.contains(",")
     return mask
 
 def get_good_titles(parts, col="stitle"):
@@ -84,28 +85,37 @@ def get_good_titles(parts, col="stitle"):
     return tid2t, t2tid
 
 
+def filter_parts(parts, min_stext_length=10):
+    """Remove segments with little context"""
+    mask = parts["stext"].str.len() >= min_stext_length
+    return parts[mask].reset_index(drop=True)
+
+
 def create_parts(records):
     # records should be a dataframe with multiindex (record_id, patient_id, record_number)
     # and a column called text
     it = records.text
-    tqdm.pandas(desc='Cutting records')
+    tqdm.pandas(desc="> Cutting records")
     parts = it.progress_apply(lambda x: pd.Series(cut_record(x))).stack()
     parts.index.names = ['rid', 'pid', 'rord',  'srord']
     parts.name = "text"
     parts = parts.reset_index()
-    parts.index.names = ['srid']
 
-    tqdm.pandas(desc='Extract and normalize')
+    tqdm.pandas(desc="> Extract and normalize")
     derived_columns = pd.DataFrame.from_records(
-        parts.text.progress_apply(extract_and_normalize),
+        parts["text"].progress_apply(extract_and_normalize),
         columns=["stext", "title", "stitle"]
     )
     parts = pd.concat([parts, derived_columns], axis=1)
 
-    print("--> Filtering titles")
+    print("> Filtering segments")
+    parts = filter_parts(parts)
+    parts.reset_index(inplace=True, drop=True)
+
+    print("> Filtering titles")
     tid2t, t2tid = get_good_titles(parts)
 
-    print("--> Adding labels")
+    print("> Adding labels")
     parts["label"] = parts["stitle"].map(defaultdict(int, t2tid))-1
 
     titles = pd.DataFrame({
@@ -137,11 +147,11 @@ def load_records(cutoff=None):
         'TEXT': pd.StringDtype()
     }
     good_categories = {
-        'Nursing/other': 10, # 10
+        'Nursing/other': 11, # 10
         'Radiology': 9,
         'Nursing': 6, # mostly Action, response, plan
         'ECG': 0,
-        'Physician ': 11,
+        'Physician ': 10, # 10
         'Discharge summary': 10,
         'Echo': 10,
         'Respiratory ': 10,
@@ -154,29 +164,32 @@ def load_records(cutoff=None):
         'Consult': 10,
     }
 
+    print("> Loading dataset")
+
     notes = pd.read_csv(f"{MIMIC_DATA}/NOTEEVENTS.csv.gz", dtype=types, nrows=cutoff)
     stats = pd.DataFrame({
         "count": notes["CATEGORY"].sort_index(inplace=False).value_counts(),
         "goodness": good_categories
     }).sort_values(["goodness", "count"], ascending=[False, False])
-    print("loaded")
+    print("  > loaded")
 
     notes["CHARTDATE"] = pd.to_datetime(notes["CHARTDATE"])
     notes = notes.sort_values(["SUBJECT_ID", "CHARTDATE"])
-    print("sorted")
+    print("  > sorted")
 
     note_relevance = notes["CATEGORY"].isin(stats.query("goodness == 11").index)
     notes = notes[note_relevance]
-    print("filtered for relevant categories")
+    print("  > filtered for relevant categories")
+    if len(notes) == 0:
+        raise Exception("Filtering removed all notes")
 
     notes = notes.groupby('SUBJECT_ID', group_keys=False).apply(lambda group: group.assign(record_number=range(len(group))))
-    print("grouped")
+    print("  > grouped")
 
     notes = notes[["ROW_ID", "SUBJECT_ID", "record_number", "TEXT"]]
     notes = notes.rename(columns={"ROW_ID": "rid", "SUBJECT_ID": "pid", "record_number": "rord", "TEXT": "text"})
     notes = notes.set_index(["rid", "pid", "rord"])
     return notes
-# .sample(10000)
 
 def create_name(pre, name, post):
     if name:
@@ -187,7 +200,7 @@ def create_name(pre, name, post):
 # and a column called text
 cutoff = None
 # cutoff = 1000
-name = "phys"
+name = "c_nurse"
 # name = None
 
 records = load_records(cutoff)

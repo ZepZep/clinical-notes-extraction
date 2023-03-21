@@ -9,10 +9,12 @@ from transformers import AutoTokenizer
 
 tqdm.pandas()
 
-inname = "nurse"
-outname = "nurse-medBERT"
-modelname = "Charangan/MedBERT"
+inname = "c_nurse"
+outname = "c_nurse-albert_l"
+# modelname = "Charangan/MedBERT"
+modelname = "albert-base-v2"
 
+print("> Loading dataset")
 parts = pd.read_feather(f"dataset/{inname}-parts.feather")
 relevant = parts.query("label >= 0").reset_index(drop=True)
 
@@ -38,7 +40,7 @@ def make_hf_dataset(relevant, indexer, tokenize_function, numproc=12):
         })
     ])
     ds = Dataset.from_pandas(df).map(
-        tokenize_function, batched=True, num_proc=numproc, desc="Tokenizing")
+        tokenize_function, batched=True, num_proc=numproc, desc="> Tokenizing")
     ds = ds.remove_columns(['__index_level_0__', 'text'])
     return ds
 
@@ -54,10 +56,10 @@ def make_train_test(relevant):
     }
     return ds
 
-print("--> Tokenizing")
+print("> Tokenizing")
 ds = make_train_test(relevant)
 
-print("--> Saving dataset")
+print("> Saving dataset")
 path = "dataset"
 ds["train"].save_to_disk(f"{path}/{outname}-train.hf")
 ds["test"].save_to_disk(f"{path}/{outname}-test.hf")

@@ -12,13 +12,14 @@ from tensorflow.keras.callbacks import Callback
 from eval_utils import create_metrics
 
 
-inname = "nurse-medBERT"
-outname = "nurse-medBERT-biLSTM"
+inname = "c_nurse-albert_l"
+outname = "c_nurse-albert_l-biLSTM"
 cut=150
 modelname = f"models/{outname}"
-vocab_size = 28996
-n_labels = 2297
+vocab_size = 30000
+n_labels = 2121
 dropout = 0.1
+epochs = 5
 
 print("--> Loading dataset")
 def load_ds(path):
@@ -72,7 +73,7 @@ class SaveCallback(Callback):
       model.save(modelname)
 
 model.fit(
-    xt, yt, batch_size=512, epochs=10,
+    xt, yt, batch_size=512, epochs=epochs,
     validation_data=(xv,yv),
     verbose=1,
     callbacks=[SaveCallback()],
